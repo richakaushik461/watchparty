@@ -17,8 +17,12 @@ app.get("/", (req, res) => {
   res.send("Watch Party Backend Running 🚀");
 });
 const server = http.createServer(app);
+
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: {
+    origin: "https://watchparty-green.vercel.app",
+    methods: ["GET", "POST"],
+  }
 });
 
 const PORT = 5000;
