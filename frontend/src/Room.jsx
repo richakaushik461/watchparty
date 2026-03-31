@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
-import "./Room.css"; // ✅ ADD THIS
+import "./Room.css";
 
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
@@ -23,6 +23,9 @@ export default function Room({ roomId, username }) {
         height: "400",
         width: "100%",
         videoId: "",
+        playerVars: {
+          origin: window.location.origin, // ✅ FIX YouTube error
+        },
         events: {
           onStateChange: (e) => {
             if (!playerRef.current) return;
@@ -33,17 +36,21 @@ export default function Room({ roomId, username }) {
 
             if (e.data === 1)
               socket.emit("play", { roomId, time });
+
             if (e.data === 2)
               socket.emit("pause", { roomId, time });
           },
         },
       });
     };
-  }, []);
+  }, [role]);
 
   /* SOCKET */
   useEffect(() => {
-    socket.connect();
+    // ✅ FIX: connect only if not connected
+    if (!socket.connected) {
+      socket.connect();
+    }
 
     socket.on("connect", () => {
       socket.emit("join_room", { roomId, username });
@@ -56,12 +63,16 @@ export default function Room({ roomId, username }) {
       const me = s.participants[socket.id];
       if (me) setRole(me.role);
 
+      // ✅ FIX: prevent crash if player not ready
+      if (!playerRef.current) return;
+
       isSyncingRef.current = true;
 
       playerRef.current.loadVideoById(s.videoId);
 
       setTimeout(() => {
         playerRef.current.seekTo(s.currentTime);
+
         s.playState === "play"
           ? playerRef.current.playVideo()
           : playerRef.current.pauseVideo();
@@ -71,6 +82,8 @@ export default function Room({ roomId, username }) {
     });
 
     socket.on("play", (t) => {
+      if (!playerRef.current) return;
+
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.playVideo();
@@ -78,6 +91,8 @@ export default function Room({ roomId, username }) {
     });
 
     socket.on("pause", (t) => {
+      if (!playerRef.current) return;
+
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.pauseVideo();
@@ -85,11 +100,13 @@ export default function Room({ roomId, username }) {
     });
 
     socket.on("change_video", (id) => {
+      if (!playerRef.current) return;
       playerRef.current.loadVideoById(id);
     });
 
     socket.on("user_joined", (d) => setParticipants(d.participants));
     socket.on("role_assigned", (d) => setParticipants(d.participants));
+
     socket.on("receive_message", (m) =>
       setChat((p) => [...p, m])
     );
@@ -99,8 +116,11 @@ export default function Room({ roomId, username }) {
       window.location.reload();
     });
 
-    return () => socket.disconnect();
-  }, []);
+    return () => {
+      socket.off();       // ✅ cleanup listeners
+      socket.disconnect();
+    };
+  }, [roomId, username]);
 
   /* ACTIONS */
   const send = () => {
@@ -111,6 +131,7 @@ export default function Room({ roomId, username }) {
       username,
       text: msg,
     });
+
     setMsg("");
   };
 
@@ -124,10 +145,11 @@ export default function Room({ roomId, username }) {
 
   return (
     <div className="room-container">
-      
-      {/* LEFT SIDE */}
+
+      {/* LEFT */}
       <div className="video-section">
         <h2>🎬 Room: {roomId}</h2>
+
         <h3>
           Your Role:{" "}
           <span className={`role-${role}`}>{role}</span>
@@ -136,6 +158,7 @@ export default function Room({ roomId, username }) {
         {role === "host" && (
           <>
             <input
+              name="video" // ✅ FIX warning
               placeholder="Paste YouTube link"
               onChange={(e) => setVideoId(e.target.value)}
             />
@@ -151,7 +174,9 @@ export default function Room({ roomId, username }) {
           <div className="participant" key={id}>
             <span>
               {p.username} (
-              <span className={`role-${p.role}`}>{p.role}</span>)
+              <span className={`role-${p.role}`}>
+                {p.role}
+              </span>)
             </span>
 
             {role === "host" && id !== socket.id && (
@@ -196,7 +221,7 @@ export default function Room({ roomId, username }) {
         ))}
       </div>
 
-      {/* RIGHT SIDE CHAT */}
+      {/* CHAT */}
       <div className="chat-section">
         <h3>💬 Chat</h3>
 
@@ -216,6 +241,7 @@ export default function Room({ roomId, username }) {
 
         <div className="chat-input">
           <input
+            name="message" // ✅ FIX warning
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
             placeholder="Type message..."
