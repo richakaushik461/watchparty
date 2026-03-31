@@ -1,0 +1,161 @@
+/* =========================
+   GLOBAL
+========================= */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: #fff;
+}
+
+/* =========================
+   LAYOUT
+========================= */
+.room-container {
+  display: flex;
+  height: 100vh;
+}
+
+/* LEFT SIDE (VIDEO) */
+.video-section {
+  flex: 2;
+  padding: 20px;
+}
+
+/* RIGHT SIDE (CHAT) */
+.chat-section {
+  flex: 1;
+  background: #111827;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================
+   HEADINGS
+========================= */
+h2 {
+  margin-bottom: 10px;
+}
+
+h3 {
+  margin-top: 20px;
+}
+
+/* =========================
+   INPUT + BUTTON
+========================= */
+input {
+  padding: 10px;
+  margin: 8px 5px 8px 0;
+  border-radius: 6px;
+  border: none;
+  outline: none;
+}
+
+button {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #2563eb;
+}
+
+/* =========================
+   VIDEO PLAYER
+========================= */
+#player {
+  margin-top: 15px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* =========================
+   PARTICIPANTS
+========================= */
+.participant {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1f2937;
+  padding: 8px;
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+.participant span {
+  font-weight: bold;
+}
+
+/* BUTTON GROUP */
+.participant button {
+  margin-left: 5px;
+  background: #374151;
+}
+
+.participant button:hover {
+  background: #4b5563;
+}
+
+/* =========================
+   CHAT BOX
+========================= */
+.chat-box {
+  flex: 1;
+  overflow-y: auto;
+  background: #1f2937;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+/* CHAT MESSAGE */
+.chat-message {
+  margin-bottom: 10px;
+}
+
+.chat-message b {
+  color: #60a5fa;
+}
+
+.chat-message small {
+  display: block;
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+/* =========================
+   CHAT INPUT
+========================= */
+.chat-input {
+  display: flex;
+}
+
+.chat-input input {
+  flex: 1;
+}
+
+.chat-input button {
+  margin-left: 5px;
+}
+
+/* =========================
+   ROLE COLORS
+========================= */
+.role-host {
+  color: #22c55e;
+}
+
+.role-moderator {
+  color: #facc15;
+}
+
+.role-participant {
+  color: #9ca3af;
+}
