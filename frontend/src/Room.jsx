@@ -5,14 +5,16 @@ import "./Room.css";
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
   const isSyncingRef = useRef(false);
+  const pendingSyncRef = useRef(null);
 
   const [participants, setParticipants] = useState({});
   const [videoId, setVideoId] = useState("");
   const [role, setRole] = useState("");
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
 
-  /* YT PLAYER */
+  /* ================= YT PLAYER ================= */
   useEffect(() => {
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
@@ -24,9 +26,20 @@ export default function Room({ roomId, username }) {
         width: "100%",
         videoId: "",
         playerVars: {
-          origin: window.location.origin, // ✅ FIX YouTube error
+          origin: window.location.origin,
         },
         events: {
+          onReady: () => {
+            console.log("🎬 Player Ready");
+            setIsPlayerReady(true);
+
+            // run pending sync
+            if (pendingSyncRef.current) {
+              handleSync(pendingSyncRef.current);
+              pendingSyncRef.current = null;
+            }
+          },
+
           onStateChange: (e) => {
             if (!playerRef.current) return;
             if (role === "participant") return;
@@ -45,40 +58,54 @@ export default function Room({ roomId, username }) {
     };
   }, [role]);
 
-  /* SOCKET */
+  /* ================= SYNC HANDLER ================= */
+  const handleSync = (s) => {
+    setParticipants(s.participants);
+    setChat(s.messages);
+
+    const me = s.participants[socket.id];
+    if (me) setRole(me.role);
+
+    if (!playerRef.current) return;
+
+    isSyncingRef.current = true;
+
+    playerRef.current.loadVideoById(s.videoId);
+
+    setTimeout(() => {
+      playerRef.current.seekTo(s.currentTime);
+
+      s.playState === "play"
+        ? playerRef.current.playVideo()
+        : playerRef.current.pauseVideo();
+
+      isSyncingRef.current = false;
+    }, 500);
+  };
+
+  /* ================= SOCKET ================= */
   useEffect(() => {
-    // ✅ FIX: connect only if not connected
-    if (!socket.connected) {
-      socket.connect();
+    if (!roomId || !username) {
+      console.log("❌ Missing data:", roomId, username);
+      return;
     }
 
+    if (!socket.connected) socket.connect();
+
     socket.on("connect", () => {
+      console.log("✅ CONNECTED:", socket.id);
       socket.emit("join_room", { roomId, username });
     });
 
     socket.on("sync_state", (s) => {
-      setParticipants(s.participants);
-      setChat(s.messages);
+      console.log("🔥 SYNC RECEIVED");
 
-      const me = s.participants[socket.id];
-      if (me) setRole(me.role);
+      if (!isPlayerReady) {
+        pendingSyncRef.current = s;
+        return;
+      }
 
-      // ✅ FIX: prevent crash if player not ready
-      if (!playerRef.current) return;
-
-      isSyncingRef.current = true;
-
-      playerRef.current.loadVideoById(s.videoId);
-
-      setTimeout(() => {
-        playerRef.current.seekTo(s.currentTime);
-
-        s.playState === "play"
-          ? playerRef.current.playVideo()
-          : playerRef.current.pauseVideo();
-
-        isSyncingRef.current = false;
-      }, 500);
+      handleSync(s);
     });
 
     socket.on("play", (t) => {
@@ -117,12 +144,12 @@ export default function Room({ roomId, username }) {
     });
 
     return () => {
-      socket.off();       // ✅ cleanup listeners
+      socket.off();
       socket.disconnect();
     };
-  }, [roomId, username]);
+  }, [roomId, username, isPlayerReady]);
 
-  /* ACTIONS */
+  /* ================= ACTIONS ================= */
   const send = () => {
     if (!msg.trim()) return;
 
@@ -143,10 +170,10 @@ export default function Room({ roomId, username }) {
     socket.emit("change_video", { roomId, videoId: id });
   };
 
+  /* ================= UI ================= */
   return (
     <div className="room-container">
 
-      {/* LEFT */}
       <div className="video-section">
         <h2>🎬 Room: {roomId}</h2>
 
@@ -158,7 +185,7 @@ export default function Room({ roomId, username }) {
         {role === "host" && (
           <>
             <input
-              name="video" // ✅ FIX warning
+              name="video"
               placeholder="Paste YouTube link"
               onChange={(e) => setVideoId(e.target.value)}
             />
@@ -221,7 +248,6 @@ export default function Room({ roomId, username }) {
         ))}
       </div>
 
-      {/* CHAT */}
       <div className="chat-section">
         <h3>💬 Chat</h3>
 
@@ -241,7 +267,7 @@ export default function Room({ roomId, username }) {
 
         <div className="chat-input">
           <input
-            name="message" // ✅ FIX warning
+            name="message"
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
             placeholder="Type message..."
