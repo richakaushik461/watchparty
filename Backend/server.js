@@ -13,7 +13,9 @@ const app = express();
 app.use(cors());
 
 connectDB();
-
+app.get("/", (req, res) => {
+  res.send("Watch Party Backend Running 🚀");
+});
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
