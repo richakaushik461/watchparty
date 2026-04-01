@@ -13,6 +13,36 @@ export default function Room({ roomId, username }) {
   const [role, setRole] = useState("");
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
+  const handleSync = (s) => {
+  console.log("🔥 SYNC RECEIVED", s);
+
+  setParticipants(s.participants);
+  setChat(s.messages);
+
+  const me = s.participants[socket.id];
+  if (me) {
+    console.log("🎯 ROLE:", me.role);
+    setRole(me.role);
+  }
+
+  if (!playerRef.current) return;
+
+  isSyncingRef.current = true;
+
+  playerRef.current.loadVideoById(s.videoId);
+
+  setTimeout(() => {
+    playerRef.current.seekTo(s.currentTime);
+
+    if (s.playState === "play") {
+      playerRef.current.playVideo();
+    } else {
+      playerRef.current.pauseVideo();
+    }
+
+    isSyncingRef.current = false;
+  }, 500);
+};
 
   /* ================= YT PLAYER ================= */
   useEffect(() => {
