@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import "./Room.css";
+const playerInitialized = useRef(false);
 
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
@@ -16,67 +17,49 @@ export default function Room({ roomId, username }) {
 
   /* ================= YOUTUBE PLAYER ================= */
   useEffect(() => {
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.body.appendChild(tag);
+  if (playerInitialized.current) return; // ✅ prevent duplicate
 
-    window.onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player("player", {
-        height: "400",
-        width: "100%",
-        videoId: "",
-        playerVars: {
-          origin: window.location.origin,
+  playerInitialized.current = true;
+
+  const tag = document.createElement("script");
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.body.appendChild(tag);
+
+  window.onYouTubeIframeAPIReady = () => {
+    playerRef.current = new window.YT.Player("player", {
+      height: "400",
+      width: "100%",
+      videoId: "",
+      playerVars: {
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: () => {
+          console.log("🎬 Player Ready");
+          setIsPlayerReady(true);
+
+          if (pendingSyncRef.current) {
+            handleSync(pendingSyncRef.current);
+            pendingSyncRef.current = null;
+          }
         },
-        events: {
-          onReady: () => {
-            console.log("🎬 Player Ready");
-            setIsPlayerReady(true);
+        onStateChange: (e) => {
+          if (!playerRef.current) return;
+          if (role === "participant") return;
+          if (isSyncingRef.current) return;
 
-            if (pendingSyncRef.current) {
-              handleSync(pendingSyncRef.current);
-              pendingSyncRef.current = null;
-            }
-          },
+          const time = playerRef.current.getCurrentTime();
 
-          onStateChange: (e) => {
-            if (!playerRef.current) return;
-            if (role === "participant") return;
-            if (isSyncingRef.current) return;
+          if (e.data === 1)
+            socket.emit("play", { roomId, time });
 
-            const time = playerRef.current.getCurrentTime();
-
-            if (e.data === 1)
-              socket.emit("play", { roomId, time });
-
-            if (e.data === 2)
-              socket.emit("pause", { roomId, time });
-          },
+          if (e.data === 2)
+            socket.emit("pause", { roomId, time });
         },
-      });
-    };
-  }, []);
-
-  /* ================= SYNC ================= */
-  const handleSync = (s) => {
-    if (!playerRef.current) return;
-
-    isSyncingRef.current = true;
-
-    playerRef.current.loadVideoById(s.videoId);
-
-    setTimeout(() => {
-      playerRef.current.seekTo(s.currentTime);
-
-      if (s.playState === "play") {
-        playerRef.current.playVideo();
-      } else {
-        playerRef.current.pauseVideo();
-      }
-
-      isSyncingRef.current = false;
-    }, 500);
+      },
+    });
   };
+}, []);
 
   /* ================= SOCKET ================= */
   useEffect(() => {
@@ -156,10 +139,17 @@ export default function Room({ roomId, username }) {
     });
 
     return () => {
-      socket.off();
-      socket.disconnect();
-    };
-  }, [roomId, username, isPlayerReady]);
+  socket.off("connect");
+  socket.off("sync_state");
+  socket.off("play");
+  socket.off("pause");
+  socket.off("change_video");
+  socket.off("user_joined");
+  socket.off("role_assigned");
+  socket.off("receive_message");
+  socket.off("kicked");
+};
+  }, [roomId, username]);
 
   /* ================= ACTIONS ================= */
   const send = () => {
