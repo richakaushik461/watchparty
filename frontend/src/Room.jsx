@@ -4,8 +4,8 @@ import "./Room.css";
 
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
-  const playerContainerRef = useRef(null); // ✅ FIXED
   const isSyncingRef = useRef(false);
+  const hasJoinedRef = useRef(false);
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [participants, setParticipants] = useState({});
@@ -14,14 +14,55 @@ export default function Room({ roomId, username }) {
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
 
-  /* ================= SYNC ================= */
+  /* ================= YOUTUBE PLAYER ================= */
+  useEffect(() => {
+    if (playerRef.current) return;
+
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
+
+    window.onYouTubeIframeAPIReady = () => {
+      playerRef.current = new window.YT.Player("player", {
+        height: "400",
+        width: "100%",
+        videoId: "",
+        playerVars: {
+          origin: window.location.origin,
+        },
+        events: {
+          onReady: () => {
+            console.log("🎬 Player Ready");
+            setIsPlayerReady(true);
+          },
+
+          onStateChange: (e) => {
+            if (!playerRef.current) return;
+            if (isSyncingRef.current) return;
+            if (role === "participant") return;
+
+            const time = playerRef.current.getCurrentTime();
+
+            if (e.data === 1) {
+              socket.emit("play", { roomId, time });
+            }
+
+            if (e.data === 2) {
+              socket.emit("pause", { roomId, time });
+            }
+          },
+        },
+      });
+    };
+  }, []);
+
+  /* ================= HANDLE SYNC ================= */
   const handleSync = (s) => {
     console.log("🔥 SYNC RECEIVED", s);
 
     setParticipants(s.participants);
     setChat(s.messages);
 
-    // ✅ CORRECT ROLE DETECTION
     const me = s.participants[socket.id];
     if (me) {
       console.log("🎯 ROLE:", me.role);
@@ -47,59 +88,14 @@ export default function Room({ roomId, username }) {
     }, 500);
   };
 
-  /* ================= YT PLAYER ================= */
-  useEffect(() => {
-    if (playerRef.current) return;
-
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.body.appendChild(tag);
-
-    window.onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player(
-        playerContainerRef.current, // ✅ FIXED (no id)
-        {
-          height: "400",
-          width: "100%",
-          videoId: "",
-          playerVars: {
-            origin: window.location.origin,
-          },
-          events: {
-            onReady: () => {
-              console.log("🎬 Player Ready");
-              setIsPlayerReady(true);
-            },
-
-            onStateChange: (e) => {
-              if (!playerRef.current) return;
-              if (role === "participant") return;
-              if (isSyncingRef.current) return;
-
-              const time = playerRef.current.getCurrentTime();
-
-              if (e.data === 1) {
-                socket.emit("play", { roomId, time });
-              }
-
-              if (e.data === 2) {
-                socket.emit("pause", { roomId, time });
-              }
-            },
-          },
-        }
-      );
-    };
-  }, []);
-
   /* ================= SOCKET ================= */
   useEffect(() => {
     if (!roomId || !username) return;
+    if (hasJoinedRef.current) return;
 
-    // ✅ FIX: no multiple reconnect
-    if (!socket.connected) {
-      socket.connect();
-    }
+    hasJoinedRef.current = true;
+
+    socket.connect();
 
     socket.on("connect", () => {
       console.log("✅ CONNECTED:", socket.id);
@@ -114,7 +110,6 @@ export default function Room({ roomId, username }) {
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.playVideo();
-
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
@@ -124,7 +119,6 @@ export default function Room({ roomId, username }) {
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.pauseVideo();
-
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
@@ -146,7 +140,7 @@ export default function Room({ roomId, username }) {
     });
 
     return () => {
-      socket.off(); // ✅ cleanup
+      socket.off();
     };
   }, [roomId, username]);
 
@@ -191,8 +185,8 @@ export default function Room({ roomId, username }) {
           </>
         )}
 
-        {/* ✅ FIXED PLAYER */}
-        <div ref={playerContainerRef}></div>
+        {/* 🔥 NEVER RE-RENDER THIS */}
+        <div id="player" key="static-player"></div>
 
         <h3>👥 Participants</h3>
 
