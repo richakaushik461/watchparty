@@ -1,154 +1,130 @@
 import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import "./Room.css";
-const playerInitialized = useRef(false);
 
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
+  const playerReadyRef = useRef(false);
   const isSyncingRef = useRef(false);
-  const pendingSyncRef = useRef(null);
 
   const [participants, setParticipants] = useState({});
   const [videoId, setVideoId] = useState("");
   const [role, setRole] = useState("");
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
 
-  /* ================= YOUTUBE PLAYER ================= */
+  /* ================= YT PLAYER ================= */
   useEffect(() => {
-  if (playerInitialized.current) return; // ✅ prevent duplicate
+    if (window.YT) {
+      createPlayer();
+      return;
+    }
 
-  playerInitialized.current = true;
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
 
-  const tag = document.createElement("script");
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.body.appendChild(tag);
+    window.onYouTubeIframeAPIReady = createPlayer;
 
-  window.onYouTubeIframeAPIReady = () => {
-    playerRef.current = new window.YT.Player("player", {
-      height: "400",
-      width: "100%",
-      videoId: "",
-      playerVars: {
-        origin: window.location.origin,
-      },
-      events: {
-        onReady: () => {
-          console.log("🎬 Player Ready");
-          setIsPlayerReady(true);
+    function createPlayer() {
+      if (playerRef.current) return; // 🔥 prevent duplicate player
 
-          if (pendingSyncRef.current) {
-            handleSync(pendingSyncRef.current);
-            pendingSyncRef.current = null;
-          }
+      playerRef.current = new window.YT.Player("player", {
+        height: "400",
+        width: "100%",
+        videoId: "",
+        playerVars: {
+          origin: window.location.origin,
         },
-        onStateChange: (e) => {
-          if (!playerRef.current) return;
-          if (role === "participant") return;
-          if (isSyncingRef.current) return;
+        events: {
+          onReady: () => {
+            console.log("🎬 Player Ready");
+            playerReadyRef.current = true;
+          },
+          onStateChange: (e) => {
+            if (!playerReadyRef.current) return;
+            if (role === "participant") return;
+            if (isSyncingRef.current) return;
 
-          const time = playerRef.current.getCurrentTime();
+            const time = playerRef.current.getCurrentTime();
 
-          if (e.data === 1)
-            socket.emit("play", { roomId, time });
+            if (e.data === 1)
+              socket.emit("play", { roomId, time });
 
-          if (e.data === 2)
-            socket.emit("pause", { roomId, time });
+            if (e.data === 2)
+              socket.emit("pause", { roomId, time });
+          },
         },
-      },
-    });
-  };
-}, []);
+      });
+    }
+  }, []); // ✅ RUN ONLY ONCE
 
   /* ================= SOCKET ================= */
   useEffect(() => {
-    if (!roomId || !username) return;
-
     if (!socket.connected) socket.connect();
 
     socket.on("connect", () => {
-      console.log("✅ CONNECTED:", socket.id);
       socket.emit("join_room", { roomId, username });
     });
 
     socket.on("sync_state", (s) => {
-      console.log("🔥 SYNC RECEIVED", s);
-
-      // ✅ ROLE FIX (MOST IMPORTANT)
-      const me = Object.values(s.participants).find(
-        (p) => p.username === username
-      );
-
-      if (me) {
-        console.log("🎯 ROLE:", me.role);
-        setRole(me.role);
-      }
-
       setParticipants(s.participants);
       setChat(s.messages);
 
-      if (!isPlayerReady) {
-        pendingSyncRef.current = s;
-        return;
-      }
+      const me = s.participants[socket.id];
+      if (me) setRole(me.role);
 
-      handleSync(s);
+      // ✅ IMPORTANT FIX
+      if (!playerReadyRef.current) return;
+
+      isSyncingRef.current = true;
+
+      playerRef.current.loadVideoById(s.videoId);
+
+      setTimeout(() => {
+        playerRef.current.seekTo(s.currentTime);
+
+        s.playState === "play"
+          ? playerRef.current.playVideo()
+          : playerRef.current.pauseVideo();
+
+        isSyncingRef.current = false;
+      }, 500);
     });
 
     socket.on("play", (t) => {
-      if (!playerRef.current) return;
+      if (!playerReadyRef.current) return;
 
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.playVideo();
-
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
     socket.on("pause", (t) => {
-      if (!playerRef.current) return;
+      if (!playerReadyRef.current) return;
 
       isSyncingRef.current = true;
       playerRef.current.seekTo(t);
       playerRef.current.pauseVideo();
-
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
     socket.on("change_video", (id) => {
-      if (!playerRef.current) return;
+      if (!playerReadyRef.current) return;
       playerRef.current.loadVideoById(id);
     });
 
-    socket.on("user_joined", (d) => {
-      setParticipants(d.participants);
-    });
+    socket.on("user_joined", (d) => setParticipants(d.participants));
+    socket.on("role_assigned", (d) => setParticipants(d.participants));
 
-    socket.on("role_assigned", (d) => {
-      setParticipants(d.participants);
-    });
-
-    socket.on("receive_message", (m) => {
-      setChat((prev) => [...prev, m]);
-    });
-
-    socket.on("kicked", () => {
-      alert("Removed by host");
-      window.location.reload();
-    });
+    socket.on("receive_message", (m) =>
+      setChat((prev) => [...prev, m])
+    );
 
     return () => {
-  socket.off("connect");
-  socket.off("sync_state");
-  socket.off("play");
-  socket.off("pause");
-  socket.off("change_video");
-  socket.off("user_joined");
-  socket.off("role_assigned");
-  socket.off("receive_message");
-  socket.off("kicked");
-};
+      socket.off();
+    };
   }, [roomId, username]);
 
   /* ================= ACTIONS ================= */
@@ -179,14 +155,12 @@ export default function Room({ roomId, username }) {
         <h2>🎬 Room: {roomId}</h2>
 
         <h3>
-          Your Role:{" "}
-          <span className={`role-${role}`}>{role}</span>
+          Your Role: <span>{role}</span>
         </h3>
 
         {role === "host" && (
           <>
             <input
-              name="video"
               placeholder="Paste YouTube link"
               onChange={(e) => setVideoId(e.target.value)}
             />
@@ -199,52 +173,8 @@ export default function Room({ roomId, username }) {
         <h3>👥 Participants</h3>
 
         {Object.entries(participants).map(([id, p]) => (
-          <div key={id} className="participant">
-            <span>
-              {p.username} (
-              <span className={`role-${p.role}`}>
-                {p.role}
-              </span>)
-            </span>
-
-            {role === "host" && id !== socket.id && (
-              <>
-                <button
-                  onClick={() =>
-                    socket.emit("assign_role", {
-                      roomId,
-                      userId: id,
-                      role: "moderator",
-                    })
-                  }
-                >
-                  Mod
-                </button>
-
-                <button
-                  onClick={() =>
-                    socket.emit("assign_role", {
-                      roomId,
-                      userId: id,
-                      role: "participant",
-                    })
-                  }
-                >
-                  User
-                </button>
-
-                <button
-                  onClick={() =>
-                    socket.emit("remove_participant", {
-                      roomId,
-                      userId: id,
-                    })
-                  }
-                >
-                  Remove
-                </button>
-              </>
-            )}
+          <div key={id}>
+            {p.username} ({p.role})
           </div>
         ))}
       </div>
@@ -252,24 +182,20 @@ export default function Room({ roomId, username }) {
       <div className="chat-section">
         <h3>💬 Chat</h3>
 
-        <div className="chat-box">
+        <div>
           {chat.map((c, i) => (
-            <div key={i} className="chat-message">
-              <b>{c.username}</b>
-              <div>{c.text}</div>
+            <div key={i}>
+              <b>{c.username}</b>: {c.text}
             </div>
           ))}
         </div>
 
-        <div className="chat-input">
-          <input
-            name="message"
-            value={msg}
-            onChange={(e) => setMsg(e.target.value)}
-            placeholder="Type message..."
-          />
-          <button onClick={send}>Send</button>
-        </div>
+        <input
+          value={msg}
+          onChange={(e) => setMsg(e.target.value)}
+          placeholder="Type message..."
+        />
+        <button onClick={send}>Send</button>
       </div>
     </div>
   );
