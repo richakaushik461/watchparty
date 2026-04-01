@@ -2,122 +2,146 @@ import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import "./Room.css";
 
-
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
-  const playerReadyRef = useRef(false);
   const isSyncingRef = useRef(false);
 
+  const [isPlayerReady, setIsPlayerReady] = useState(false); // ✅ FIX
   const [participants, setParticipants] = useState({});
   const [videoId, setVideoId] = useState("");
   const [role, setRole] = useState("");
   const [chat, setChat] = useState([]);
   const [msg, setMsg] = useState("");
+
+  /* ================= SYNC ================= */
   const handleSync = (s) => {
-  console.log("🔥 SYNC RECEIVED", s);
+    console.log("🔥 SYNC RECEIVED", s);
 
-  setParticipants(s.participants);
-  setChat(s.messages);
+    setParticipants(s.participants);
+    setChat(s.messages);
 
-  const me = s.participants[socket.id];
-  if (me) {
-    console.log("🎯 ROLE:", me.role);
-    setRole(me.role);
-  }
-
-  if (!playerRef.current) return;
-
-  isSyncingRef.current = true;
-
-  playerRef.current.loadVideoById(s.videoId);
-
-  setTimeout(() => {
-    playerRef.current.seekTo(s.currentTime);
-
-    if (s.playState === "play") {
-      playerRef.current.playVideo();
-    } else {
-      playerRef.current.pauseVideo();
+    const me = s.participants[socket.id];
+    if (me) {
+      console.log("🎯 ROLE:", me.role);
+      setRole(me.role);
     }
 
-    isSyncingRef.current = false;
-  }, 500);
-};
+    // ❌ WAIT until player ready
+    if (!playerRef.current || !isPlayerReady) return;
+
+    isSyncingRef.current = true;
+
+    playerRef.current.loadVideoById(s.videoId);
+
+    setTimeout(() => {
+      playerRef.current.seekTo(s.currentTime);
+
+      if (s.playState === "play") {
+        playerRef.current.playVideo();
+      } else {
+        playerRef.current.pauseVideo();
+      }
+
+      isSyncingRef.current = false;
+    }, 500);
+  };
 
   /* ================= YT PLAYER ================= */
   useEffect(() => {
-  if (playerRef.current) return; // ✅ STOP DUPLICATE PLAYER
+    if (playerRef.current) return;
 
-  const tag = document.createElement("script");
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.body.appendChild(tag);
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.body.appendChild(tag);
 
-  window.onYouTubeIframeAPIReady = () => {
-    playerRef.current = new window.YT.Player("player", {
-      height: "400",
-      width: "100%",
-      videoId: "",
-      playerVars: {
-        origin: window.location.origin,
-      },
-      events: {
-        onReady: () => {
-          console.log("🎬 Player Ready");
-          setIsPlayerReady(true);
+    window.onYouTubeIframeAPIReady = () => {
+      playerRef.current = new window.YT.Player("player", {
+        height: "400",
+        width: "100%",
+        videoId: "",
+        playerVars: {
+          origin: window.location.origin,
         },
-      },
-    });
-  };
-}, []);
+        events: {
+          onReady: () => {
+            console.log("🎬 Player Ready");
+            setIsPlayerReady(true); // ✅ FIX
+          },
+
+          onStateChange: (e) => {
+            if (!playerRef.current) return;
+            if (role === "participant") return;
+            if (isSyncingRef.current) return;
+
+            const time = playerRef.current.getCurrentTime();
+
+            if (e.data === 1) {
+              socket.emit("play", { roomId, time });
+            }
+
+            if (e.data === 2) {
+              socket.emit("pause", { roomId, time });
+            }
+          },
+        },
+      });
+    };
+  }, []);
+
   /* ================= SOCKET ================= */
   useEffect(() => {
-  if (!roomId || !username) return;
+    if (!roomId || !username) return;
 
-  if (!socket.connected) {
-    socket.connect();
-  }
+    if (!socket.connected) {
+      socket.connect();
+    }
 
-  socket.emit("join_room", { roomId, username });
+    socket.emit("join_room", { roomId, username });
 
-  socket.on("sync_state", handleSync);
+    socket.on("sync_state", (s) => {
+      if (!isPlayerReady) return; // ✅ WAIT
+      handleSync(s);
+    });
 
-  socket.on("play", (t) => {
-    if (!playerRef.current) return;
-    isSyncingRef.current = true;
-    playerRef.current.seekTo(t);
-    playerRef.current.playVideo();
-    setTimeout(() => (isSyncingRef.current = false), 300);
-  });
+    socket.on("play", (t) => {
+      if (!playerRef.current) return;
 
-  socket.on("pause", (t) => {
-    if (!playerRef.current) return;
-    isSyncingRef.current = true;
-    playerRef.current.seekTo(t);
-    playerRef.current.pauseVideo();
-    setTimeout(() => (isSyncingRef.current = false), 300);
-  });
+      isSyncingRef.current = true;
+      playerRef.current.seekTo(t);
+      playerRef.current.playVideo();
+      setTimeout(() => (isSyncingRef.current = false), 300);
+    });
 
-  socket.on("change_video", (id) => {
-    if (!playerRef.current) return;
-    playerRef.current.loadVideoById(id);
-  });
+    socket.on("pause", (t) => {
+      if (!playerRef.current) return;
 
-  socket.on("user_joined", (d) => setParticipants(d.participants));
-  socket.on("role_assigned", (d) => setParticipants(d.participants));
+      isSyncingRef.current = true;
+      playerRef.current.seekTo(t);
+      playerRef.current.pauseVideo();
+      setTimeout(() => (isSyncingRef.current = false), 300);
+    });
 
-  socket.on("receive_message", (m) =>
-    setChat((p) => [...p, m])
-  );
+    socket.on("change_video", (id) => {
+      if (!playerRef.current) return;
+      playerRef.current.loadVideoById(id);
+    });
 
-  socket.on("kicked", () => {
-    alert("Removed");
-    window.location.reload();
-  });
+    socket.on("user_joined", (d) => setParticipants(d.participants));
+    socket.on("role_assigned", (d) => setParticipants(d.participants));
 
-  return () => {
-    socket.off(); // ✅ ONLY THIS
-  };
-}, [roomId, username]);
+    socket.on("receive_message", (m) =>
+      setChat((p) => [...p, m])
+    );
+
+    socket.on("kicked", () => {
+      alert("Removed");
+      window.location.reload();
+    });
+
+    return () => {
+      socket.off();
+    };
+  }, [roomId, username, isPlayerReady]); // ✅ FIX
 
   /* ================= ACTIONS ================= */
   const send = () => {
