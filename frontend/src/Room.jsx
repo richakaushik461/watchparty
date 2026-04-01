@@ -20,7 +20,9 @@ export default function Room({ roomId, username }) {
     setParticipants(s.participants);
     setChat(s.messages);
 
-    const me = s.participants[socket.id];
+    const me = Object.values(s.participants).find(
+  (p) => p.username === username
+);
     if (me) {
       console.log("🎯 ROLE:", me.role);
       setRole(me.role);

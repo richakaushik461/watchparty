@@ -57,19 +57,17 @@ io.on("connection", (socket) => {
         }
       });
     } else {
-      let existing = room.participants.find(
-        (p) => p.username === username
-      );
+      // remove old entry of same username
+room.participants = room.participants.filter(
+  (p) => p.username !== username
+);
 
-      if (existing) {
-        existing.userId = socket.id;
-      } else {
-        room.participants.push({
-          userId: socket.id,
-          username,
-          role: "participant"
-        });
-      }
+// add fresh user
+room.participants.push({
+  userId: socket.id,
+  username,
+  role: room.participants.length === 0 ? "host" : "participant"
+});
 
       if (!room.participants.find((p) => p.role === "host")) {
         room.participants[0].role = "host";
