@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import "./Room.css";
 
+
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
   const playerReadyRef = useRef(false);
@@ -15,50 +16,54 @@ export default function Room({ roomId, username }) {
 
   /* ================= YT PLAYER ================= */
   useEffect(() => {
-    if (window.YT) {
-      createPlayer();
-      return;
-    }
+  if (window.YT) {
+    createPlayer();
+    return;
+  }
 
+  const existingScript = document.getElementById("yt-script");
+
+  if (!existingScript) {
     const tag = document.createElement("script");
+    tag.id = "yt-script";
     tag.src = "https://www.youtube.com/iframe_api";
     document.body.appendChild(tag);
+  }
 
-    window.onYouTubeIframeAPIReady = createPlayer;
+  window.onYouTubeIframeAPIReady = createPlayer;
 
-    function createPlayer() {
-      if (playerRef.current) return; // 🔥 prevent duplicate player
+  function createPlayer() {
+    if (playerRef.current) return; // ✅ prevent duplicate
 
-      playerRef.current = new window.YT.Player("player", {
-        height: "400",
-        width: "100%",
-        videoId: "",
-        playerVars: {
-          origin: window.location.origin,
+    playerRef.current = new window.YT.Player("player", {
+      height: "400",
+      width: "100%",
+      videoId: "",
+      playerVars: {
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: () => {
+          console.log("🎬 Player Ready");
+          playerReadyRef.current = true;
         },
-        events: {
-          onReady: () => {
-            console.log("🎬 Player Ready");
-            playerReadyRef.current = true;
-          },
-          onStateChange: (e) => {
-            if (!playerReadyRef.current) return;
-            if (role === "participant") return;
-            if (isSyncingRef.current) return;
+        onStateChange: (e) => {
+          if (!playerRef.current) return;
+          if (role === "participant") return;
+          if (isSyncingRef.current) return;
 
-            const time = playerRef.current.getCurrentTime();
+          const time = playerRef.current.getCurrentTime();
 
-            if (e.data === 1)
-              socket.emit("play", { roomId, time });
+          if (e.data === 1)
+            socket.emit("play", { roomId, time });
 
-            if (e.data === 2)
-              socket.emit("pause", { roomId, time });
-          },
+          if (e.data === 2)
+            socket.emit("pause", { roomId, time });
         },
-      });
-    }
-  }, []); // ✅ RUN ONLY ONCE
-
+      },
+    });
+  }
+}, []);
   /* ================= SOCKET ================= */
   useEffect(() => {
     if (!socket.connected) socket.connect();
