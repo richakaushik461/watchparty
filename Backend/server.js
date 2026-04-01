@@ -39,67 +39,67 @@ io.on("connection", (socket) => {
 
   /* JOIN ROOM */
   socket.on("join_room", async ({ roomId, username }) => {
-    socket.join(roomId);
+  socket.join(roomId);
 
-    let room = await Room.findOne({ roomId });
+  let room = await Room.findOne({ roomId });
 
-    if (!room) {
-      room = await Room.create({
-        roomId,
-        hostId: socket.id,
-        participants: [
-          { userId: socket.id, username, role: "host" }
-        ],
-        videoState: {
-          videoId: "dQw4w9WgXcQ",
-          currentTime: 0,
-          isPlaying: false
-        }
-      });
-    } else {
-      // remove old entry of same username
-room.participants = room.participants.filter(
-  (p) => p.username !== username
-);
-
-// add fresh user
-room.participants.push({
-  userId: socket.id,
-  username,
-  role: room.participants.length === 0 ? "host" : "participant"
-});
-
-      if (!room.participants.find((p) => p.role === "host")) {
-        room.participants[0].role = "host";
-        room.hostId = room.participants[0].userId;
+  if (!room) {
+    // ✅ FIRST USER = HOST
+    room = await Room.create({
+      roomId,
+      hostId: socket.id,
+      participants: [
+        { userId: socket.id, username, role: "host" }
+      ],
+      videoState: {
+        videoId: "dQw4w9WgXcQ",
+        currentTime: 0,
+        isPlaying: false
       }
+    });
+  } else {
+    // ✅ CHECK if user already exists
+    let existingUser = room.participants.find(
+      (p) => p.username === username
+    );
 
-      await room.save();
+    if (existingUser) {
+      // ✅ ONLY update socket id (KEEP ROLE SAME)
+      existingUser.userId = socket.id;
+    } else {
+      // ✅ NEW USER = PARTICIPANT
+      room.participants.push({
+        userId: socket.id,
+        username,
+        role: "participant"
+      });
     }
 
-    const messages = await Message.find({ roomId }).sort({ time: 1 });
+    await room.save();
+  }
 
-    const participantsObj = {};
-    room.participants.forEach((p) => {
-      participantsObj[p.userId] = {
-        username: p.username,
-        role: p.role
-      };
-    });
+  const messages = await Message.find({ roomId }).sort({ time: 1 });
 
-    socket.emit("sync_state", {
-      videoId: room.videoState.videoId,
-      currentTime: room.videoState.currentTime,
-      playState: room.videoState.isPlaying ? "play" : "pause",
-      participants: participantsObj,
-      messages
-    });
-
-    io.to(roomId).emit("user_joined", {
-      participants: participantsObj
-    });
+  const participantsObj = {};
+  room.participants.forEach((p) => {
+    participantsObj[p.userId] = {
+      username: p.username,
+      role: p.role
+    };
   });
 
+  socket.emit("sync_state", {
+    videoId: room.videoState.videoId,
+    currentTime: room.videoState.currentTime,
+    playState: room.videoState.isPlaying ? "play" : "pause",
+    participants: participantsObj,
+    messages
+  });
+
+  io.to(roomId).emit("user_joined", {
+    participants: participantsObj
+  });
+});
   /* PLAY */
   socket.on("play", async ({ roomId, time }) => {
     const room = await Room.findOne({ roomId });

@@ -6,7 +6,7 @@ export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
   const isSyncingRef = useRef(false);
 
-  const [isPlayerReady, setIsPlayerReady] = useState(false); // ✅ FIX
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [participants, setParticipants] = useState({});
   const [videoId, setVideoId] = useState("");
   const [role, setRole] = useState("");
@@ -20,15 +20,13 @@ export default function Room({ roomId, username }) {
     setParticipants(s.participants);
     setChat(s.messages);
 
-    const me = Object.values(s.participants).find(
-  (p) => p.username === username
-);
+    // ✅ FIX: correct role detection
+    const me = s.participants[socket.id];
     if (me) {
       console.log("🎯 ROLE:", me.role);
       setRole(me.role);
     }
 
-    // ❌ WAIT until player ready
     if (!playerRef.current || !isPlayerReady) return;
 
     isSyncingRef.current = true;
@@ -67,7 +65,7 @@ export default function Room({ roomId, username }) {
         events: {
           onReady: () => {
             console.log("🎬 Player Ready");
-            setIsPlayerReady(true); // ✅ FIX
+            setIsPlayerReady(true);
           },
 
           onStateChange: (e) => {
@@ -92,58 +90,62 @@ export default function Room({ roomId, username }) {
 
   /* ================= SOCKET ================= */
   useEffect(() => {
-  if (!roomId || !username) return;
+    if (!roomId || !username) return;
 
-  socket.disconnect(); // ✅ reset
-  socket.connect();    // ✅ fresh connect
+    // ✅ FIX: DO NOT disconnect again and again
+    if (!socket.connected) {
+      socket.connect();
+    }
 
-  socket.on("connect", () => {
-    console.log("✅ CONNECTED:", socket.id);
-    socket.emit("join_room", { roomId, username });
-  });
+    socket.on("connect", () => {
+      console.log("✅ CONNECTED:", socket.id);
+      socket.emit("join_room", { roomId, username });
+    });
 
-  socket.on("sync_state", (s) => {
-    if (!isPlayerReady) return;
-    handleSync(s);
-  });
+    socket.on("sync_state", handleSync);
 
-  socket.on("play", (t) => {
-    if (!playerRef.current) return;
-    isSyncingRef.current = true;
-    playerRef.current.seekTo(t);
-    playerRef.current.playVideo();
-    setTimeout(() => (isSyncingRef.current = false), 300);
-  });
+    socket.on("play", (t) => {
+      if (!playerRef.current) return;
 
-  socket.on("pause", (t) => {
-    if (!playerRef.current) return;
-    isSyncingRef.current = true;
-    playerRef.current.seekTo(t);
-    playerRef.current.pauseVideo();
-    setTimeout(() => (isSyncingRef.current = false), 300);
-  });
+      isSyncingRef.current = true;
+      playerRef.current.seekTo(t);
+      playerRef.current.playVideo();
 
-  socket.on("change_video", (id) => {
-    if (!playerRef.current) return;
-    playerRef.current.loadVideoById(id);
-  });
+      setTimeout(() => (isSyncingRef.current = false), 300);
+    });
 
-  socket.on("user_joined", (d) => setParticipants(d.participants));
-  socket.on("role_assigned", (d) => setParticipants(d.participants));
+    socket.on("pause", (t) => {
+      if (!playerRef.current) return;
 
-  socket.on("receive_message", (m) =>
-    setChat((p) => [...p, m])
-  );
+      isSyncingRef.current = true;
+      playerRef.current.seekTo(t);
+      playerRef.current.pauseVideo();
 
-  socket.on("kicked", () => {
-    alert("Removed");
-    window.location.reload();
-  });
+      setTimeout(() => (isSyncingRef.current = false), 300);
+    });
 
-  return () => {
-    socket.off();
-  };
-}, [roomId, username, isPlayerReady]);
+    socket.on("change_video", (id) => {
+      if (!playerRef.current) return;
+      playerRef.current.loadVideoById(id);
+    });
+
+    socket.on("user_joined", (d) => setParticipants(d.participants));
+    socket.on("role_assigned", (d) => setParticipants(d.participants));
+
+    socket.on("receive_message", (m) =>
+      setChat((p) => [...p, m])
+    );
+
+    socket.on("kicked", () => {
+      alert("Removed");
+      window.location.reload();
+    });
+
+    return () => {
+      socket.off();
+    };
+  }, [roomId, username]);
+
   /* ================= ACTIONS ================= */
   const send = () => {
     if (!msg.trim()) return;
