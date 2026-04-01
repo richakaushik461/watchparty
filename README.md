@@ -30,23 +30,23 @@ Deployment:
 * Vercel (Frontend)
 * Render (Backend)
 _______________________________________________________________________________________________________________________________________________
-## Project Structure
+**Project Structure**
 watchparty/
 │
 ├── frontend/        # React App
 ├── backend/         # Node + Socket.io Server
 └── README.md
 _______________________________________________________________________________________________________________________________________________
-##  Setup & Run Locally
+**Setup & Run Locally**
 
-### 1️⃣ Clone the repository
+**1.Clone the repository**
 
 ```bash
 git clone https://github.com/richakaushik461/watchparty.git
 cd watchparty
 ```
 ________________________________________________________________________________________________________________________________________________
-### 2️⃣ Setup Backend
+**2.Setup Backend**
 
 ```bash
 cd backend
@@ -64,21 +64,19 @@ Run backend:
 ```bash
 npm start
 ```
-
 _______________________________________________________________________________________________________________________________________________
-
-### 3️⃣ Setup Frontend
+**3.Setup Frontend**
 ```bash
 cd ../frontend
 npm install
 npm run dev
 ___________________________________________________________________________________________________________________________________________________
-### 4️⃣ Open in Browser
+**4.Open in Browser**
 ```
 http://localhost:5173
 ```
 ___________________________________________________________________________________________________________________________________________________
-## 📡 How It Works
+**How It Works**
 
 1. User enters **username + room ID**
 2. First user becomes **Host**
@@ -90,19 +88,17 @@ ________________________________________________________________________________
    * Assign roles
 5. All users stay **perfectly synced**
 _____________________________________________________________________________________________________________________________________________________
-## 🎯 Future Improvements
+**Future Improvements**
 
-* 🔐 Authentication (Login/Signup)
-* 📃 Video queue system
-* 🎧 Voice chat
-* 🔒 Private rooms with passwords
-* 📱 Mobile responsiveness improvements
-
-____________________________________________________________________________________________________________________________________________________
-## 👩‍💻 Author
+* Authentication (Login/Signup)
+* Video queue system
+* Voice chat
+* Private rooms with passwords
+* Mobile responsiveness improvements
+_______________________________________________________________________________________________________________________________________________
+**Author**
 Richa Kaushik
 ____________________________________________________________________________________________________________________________________________________
-## 📌 Note
-
+**Note**
 This project demonstrates real-time synchronization using Socket.io and handling of YouTube Iframe API with React.
 _____________________________________________________________________________________________________________________________________________________
