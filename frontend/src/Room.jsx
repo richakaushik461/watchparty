@@ -14,13 +14,11 @@ export default function Room({ roomId, username }) {
   const [msg, setMsg] = useState("");
   const [isPlayerReady, setIsPlayerReady] = useState(false);
 
-  /* ================= YT PLAYER ================= */
+  /* ================= YOUTUBE PLAYER ================= */
   useEffect(() => {
-    const tag = document.createElement("script");
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.body.appendChild(tag);
+    function createPlayer() {
+      if (playerRef.current) return;
 
-    window.onYouTubeIframeAPIReady = () => {
       playerRef.current = new window.YT.Player("player", {
         height: "400",
         width: "100%",
@@ -33,7 +31,6 @@ export default function Room({ roomId, username }) {
             console.log("🎬 Player Ready");
             setIsPlayerReady(true);
 
-            // run pending sync
             if (pendingSyncRef.current) {
               handleSync(pendingSyncRef.current);
               pendingSyncRef.current = null;
@@ -55,18 +52,34 @@ export default function Room({ roomId, username }) {
           },
         },
       });
-    };
-  }, [role]);
+    }
 
-  /* ================= SYNC HANDLER ================= */
+    if (window.YT && window.YT.Player) {
+      createPlayer();
+    } else {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.body.appendChild(tag);
+      window.onYouTubeIframeAPIReady = createPlayer;
+    }
+  }, []);
+
+  /* ================= SYNC ================= */
   const handleSync = (s) => {
     setParticipants(s.participants);
     setChat(s.messages);
 
-    const me = s.participants[socket.id];
-    if (me) setRole(me.role);
+    const myId = socket.id;
+    const me = Object.entries(s.participants).find(
+      ([id]) => id === myId
+    );
 
-    if (!playerRef.current) return;
+    if (me) setRole(me[1].role);
+
+    if (!playerRef.current || !isPlayerReady) {
+      pendingSyncRef.current = s;
+      return;
+    }
 
     isSyncingRef.current = true;
 
@@ -85,11 +98,6 @@ export default function Room({ roomId, username }) {
 
   /* ================= SOCKET ================= */
   useEffect(() => {
-    if (!roomId || !username) {
-      console.log("❌ Missing data:", roomId, username);
-      return;
-    }
-
     if (!socket.connected) socket.connect();
 
     socket.on("connect", () => {
@@ -147,7 +155,7 @@ export default function Room({ roomId, username }) {
       socket.off();
       socket.disconnect();
     };
-  }, [roomId, username, isPlayerReady]);
+  }, [roomId, username]);
 
   /* ================= ACTIONS ================= */
   const send = () => {
@@ -200,48 +208,33 @@ export default function Room({ roomId, username }) {
         {Object.entries(participants).map(([id, p]) => (
           <div className="participant" key={id}>
             <span>
-              {p.username} (
-              <span className={`role-${p.role}`}>
-                {p.role}
-              </span>)
+              {p.username} ({p.role})
             </span>
 
             {role === "host" && id !== socket.id && (
               <>
-                <button
-                  onClick={() =>
-                    socket.emit("assign_role", {
-                      roomId,
-                      userId: id,
-                      role: "moderator",
-                    })
-                  }
-                >
-                  Mod
-                </button>
+                <button onClick={() =>
+                  socket.emit("assign_role", {
+                    roomId,
+                    userId: id,
+                    role: "moderator",
+                  })
+                }>Mod</button>
 
-                <button
-                  onClick={() =>
-                    socket.emit("assign_role", {
-                      roomId,
-                      userId: id,
-                      role: "participant",
-                    })
-                  }
-                >
-                  User
-                </button>
+                <button onClick={() =>
+                  socket.emit("assign_role", {
+                    roomId,
+                    userId: id,
+                    role: "participant",
+                  })
+                }>User</button>
 
-                <button
-                  onClick={() =>
-                    socket.emit("remove_participant", {
-                      roomId,
-                      userId: id,
-                    })
-                  }
-                >
-                  Remove
-                </button>
+                <button onClick={() =>
+                  socket.emit("remove_participant", {
+                    roomId,
+                    userId: id,
+                  })
+                }>Remove</button>
               </>
             )}
           </div>
@@ -253,14 +246,8 @@ export default function Room({ roomId, username }) {
 
         <div className="chat-box">
           {chat.map((c, i) => (
-            <div key={i} className="chat-message">
-              <b>{c.username}</b>
-              <div>{c.text}</div>
-              <small>
-                {c.time
-                  ? new Date(c.time).toLocaleTimeString()
-                  : ""}
-              </small>
+            <div key={i}>
+              <b>{c.username}</b>: {c.text}
             </div>
           ))}
         </div>
@@ -270,12 +257,10 @@ export default function Room({ roomId, username }) {
             name="message"
             value={msg}
             onChange={(e) => setMsg(e.target.value)}
-            placeholder="Type message..."
           />
           <button onClick={send}>Send</button>
         </div>
       </div>
-
     </div>
   );
 }
