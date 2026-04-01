@@ -4,6 +4,7 @@ import "./Room.css";
 
 export default function Room({ roomId, username }) {
   const playerRef = useRef(null);
+  const playerContainerRef = useRef(null); // ✅ FIXED
   const isSyncingRef = useRef(false);
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
@@ -20,7 +21,7 @@ export default function Room({ roomId, username }) {
     setParticipants(s.participants);
     setChat(s.messages);
 
-    // ✅ FIX: correct role detection
+    // ✅ CORRECT ROLE DETECTION
     const me = s.participants[socket.id];
     if (me) {
       console.log("🎯 ROLE:", me.role);
@@ -55,36 +56,39 @@ export default function Room({ roomId, username }) {
     document.body.appendChild(tag);
 
     window.onYouTubeIframeAPIReady = () => {
-      playerRef.current = new window.YT.Player("player", {
-        height: "400",
-        width: "100%",
-        videoId: "",
-        playerVars: {
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: () => {
-            console.log("🎬 Player Ready");
-            setIsPlayerReady(true);
+      playerRef.current = new window.YT.Player(
+        playerContainerRef.current, // ✅ FIXED (no id)
+        {
+          height: "400",
+          width: "100%",
+          videoId: "",
+          playerVars: {
+            origin: window.location.origin,
           },
+          events: {
+            onReady: () => {
+              console.log("🎬 Player Ready");
+              setIsPlayerReady(true);
+            },
 
-          onStateChange: (e) => {
-            if (!playerRef.current) return;
-            if (role === "participant") return;
-            if (isSyncingRef.current) return;
+            onStateChange: (e) => {
+              if (!playerRef.current) return;
+              if (role === "participant") return;
+              if (isSyncingRef.current) return;
 
-            const time = playerRef.current.getCurrentTime();
+              const time = playerRef.current.getCurrentTime();
 
-            if (e.data === 1) {
-              socket.emit("play", { roomId, time });
-            }
+              if (e.data === 1) {
+                socket.emit("play", { roomId, time });
+              }
 
-            if (e.data === 2) {
-              socket.emit("pause", { roomId, time });
-            }
+              if (e.data === 2) {
+                socket.emit("pause", { roomId, time });
+              }
+            },
           },
-        },
-      });
+        }
+      );
     };
   }, []);
 
@@ -92,7 +96,7 @@ export default function Room({ roomId, username }) {
   useEffect(() => {
     if (!roomId || !username) return;
 
-    // ✅ FIX: DO NOT disconnect again and again
+    // ✅ FIX: no multiple reconnect
     if (!socket.connected) {
       socket.connect();
     }
@@ -133,7 +137,7 @@ export default function Room({ roomId, username }) {
     socket.on("role_assigned", (d) => setParticipants(d.participants));
 
     socket.on("receive_message", (m) =>
-      setChat((p) => [...p, m])
+      setChat((prev) => [...prev, m])
     );
 
     socket.on("kicked", () => {
@@ -142,7 +146,7 @@ export default function Room({ roomId, username }) {
     });
 
     return () => {
-      socket.off();
+      socket.off(); // ✅ cleanup
     };
   }, [roomId, username]);
 
@@ -187,7 +191,8 @@ export default function Room({ roomId, username }) {
           </>
         )}
 
-        <div id="player"></div>
+        {/* ✅ FIXED PLAYER */}
+        <div ref={playerContainerRef}></div>
 
         <h3>👥 Participants</h3>
 
