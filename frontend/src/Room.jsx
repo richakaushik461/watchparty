@@ -1,29 +1,47 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import "./Room.css";
 
-/* ─── Isolated player wrapper – never re-renders ─── */
-function YouTubePlayer({ onReady, onStateChange }) {
+/* ═══════════════════════════════════════════════
+   YouTubePlayer — receives NO changing props.
+   Communicates only via stable refs passed in.
+   React will NEVER re-render this component.
+═══════════════════════════════════════════════ */
+function YouTubePlayer({ playerRef, isSyncingRef, roleRef, roomId }) {
   const containerRef = useRef(null);
-  const playerRef = useRef(null);
 
   useEffect(() => {
+    // roomId and all refs are stable — this runs exactly once
     const initPlayer = () => {
       if (playerRef.current) return;
+
       playerRef.current = new window.YT.Player(containerRef.current, {
         height: "400",
         width: "100%",
         videoId: "",
-        playerVars: { origin: window.location.origin },
+        playerVars: {
+          origin: window.location.origin,
+          enablejsapi: 1,
+        },
         events: {
-          onReady: () => onReady(playerRef.current),
-          onStateChange,
+          onReady: () => {
+            console.log("Player Ready");
+          },
+          onStateChange: (e) => {
+            if (!playerRef.current) return;
+            if (roleRef.current === "participant") return;
+            if (isSyncingRef.current) return;
+
+            const time = playerRef.current.getCurrentTime();
+            if (e.data === 1) socket.emit("play", { roomId, time });
+            if (e.data === 2) socket.emit("pause", { roomId, time });
+          },
         },
       });
     };
 
     if (window.YT && window.YT.Player) {
-      initPlayer(); // API already loaded
+      initPlayer();
     } else {
       window.onYouTubeIframeAPIReady = initPlayer;
       if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
@@ -32,90 +50,67 @@ function YouTubePlayer({ onReady, onStateChange }) {
         document.body.appendChild(tag);
       }
     }
-  }, []); // empty deps — runs once, never re-runs
+  }, []); // ← EMPTY DEPS, runs once only
 
-  // containerRef div is NEVER touched by React after mount
   return <div ref={containerRef} />;
 }
 
-/* ─── Main Room component ─── */
+/* ═══════════════════════════════════════════════
+   Room — all state lives here, player is isolated
+═══════════════════════════════════════════════ */
 export default function Room({ roomId, username }) {
-  const playerRef = useRef(null);       // holds YT player instance
+  // Shared refs — passed to YouTubePlayer, never cause re-renders
+  const playerRef    = useRef(null);
   const isSyncingRef = useRef(false);
-  const roleRef = useRef("");
-  const pendingSyncRef = useRef(null);  // store sync if player not ready yet
+  const roleRef      = useRef("");
 
+  // Pending sync — if sync arrives before player ready
+  const pendingSyncRef = useRef(null);
+
+  // UI state — these cause re-renders in Room, NOT in YouTubePlayer
   const [participants, setParticipants] = useState({});
-  const [videoId, setVideoId] = useState("");
-  const [role, setRole] = useState("");
-  const [chat, setChat] = useState([]);
-  const [msg, setMsg] = useState("");
+  const [videoInputVal, setVideoInputVal] = useState("");
+  const [role, setRole]   = useState("");
+  const [chat, setChat]   = useState([]);
+  const [msg,  setMsg]    = useState("");
 
-  const setRoleBoth = (r) => {
+  /* ── helper: update role in both state and ref ── */
+  const updateRole = (r) => {
     setRole(r);
     roleRef.current = r;
   };
 
-  /* ── Apply sync state to player ── */
-  const applySync = useCallback((s, player) => {
-    if (!player) return;
-    isSyncingRef.current = true;
-    player.loadVideoById({
-      videoId: s.videoId,
-      startSeconds: s.currentTime,
-    });
-    // loadVideoById auto-plays; pause if needed
-    setTimeout(() => {
-      if (s.playState !== "play") {
-        player.pauseVideo();
-        player.seekTo(s.currentTime, true);
-      }
-      isSyncingRef.current = false;
-    }, 800);
-  }, []);
-
-  /* ── Called by YouTubePlayer when ready ── */
-  const handlePlayerReady = useCallback((player) => {
-    console.log("Player Ready");
-    playerRef.current = player;
-    // if sync arrived before player was ready, apply it now
-    if (pendingSyncRef.current) {
-      applySync(pendingSyncRef.current, player);
-      pendingSyncRef.current = null;
-    }
-  }, [applySync]);
-
-  /* ── YT state change ── */
-  const handleStateChange = useCallback((e) => {
-    if (!playerRef.current) return;
-    if (roleRef.current === "participant") return;
-    if (isSyncingRef.current) return;
-
-    const time = playerRef.current.getCurrentTime();
-    if (e.data === 1) socket.emit("play", { roomId, time });
-    if (e.data === 2) socket.emit("pause", { roomId, time });
-  }, [roomId]);
-
-  /* ── Socket sync_state handler ── */
-  const handleSync = useCallback((s) => {
-    console.log("SYNC RECEIVED", s);
-
-    // update UI state (these cause re-renders — but YouTubePlayer is isolated)
-    setParticipants(s.participants);
-    setChat(s.messages || []);
-
-    const me = s.participants[socket.id];
-    if (me) setRoleBoth(me.role);
-
-    if (!playerRef.current) {
-      // player not ready yet — store sync, apply when ready
+  /* ── apply a sync object to the player ── */
+  const applySync = (s) => {
+    const player = playerRef.current;
+    if (!player) {
+      // Player not ready yet — store for later
       pendingSyncRef.current = s;
       return;
     }
-    applySync(s, playerRef.current);
-  }, [applySync]);
 
-  /* ── Socket events ── */
+    isSyncingRef.current = true;
+
+    // cueVideoById won't autoplay — safer than loadVideoById
+    player.cueVideoById({
+      videoId: s.videoId,
+      startSeconds: s.currentTime,
+    });
+
+    setTimeout(() => {
+      if (s.playState === "play") {
+        player.playVideo();
+      } else {
+        player.seekTo(s.currentTime, true);
+        player.pauseVideo();
+      }
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 200);
+    }, 600);
+  };
+
+  /* ── Socket setup ── */
   useEffect(() => {
     if (!roomId || !username) return;
 
@@ -126,34 +121,50 @@ export default function Room({ roomId, username }) {
       socket.emit("join_room", { roomId, username });
     });
 
-    socket.on("sync_state", handleSync);
+    socket.on("sync_state", (s) => {
+      console.log("SYNC RECEIVED", s);
+
+      // Update UI state (re-renders Room but NOT YouTubePlayer)
+      setParticipants(s.participants);
+      setChat(s.messages || []);
+
+      const me = s.participants[socket.id];
+      if (me) updateRole(me.role);
+
+      // Apply to player (uses refs only — safe)
+      applySync(s);
+    });
 
     socket.on("play", (t) => {
-      if (!playerRef.current) return;
+      const p = playerRef.current;
+      if (!p) return;
       isSyncingRef.current = true;
-      playerRef.current.seekTo(t, true);
-      playerRef.current.playVideo();
+      p.seekTo(t, true);
+      p.playVideo();
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
     socket.on("pause", (t) => {
-      if (!playerRef.current) return;
+      const p = playerRef.current;
+      if (!p) return;
       isSyncingRef.current = true;
-      playerRef.current.seekTo(t, true);
-      playerRef.current.pauseVideo();
+      p.seekTo(t, true);
+      p.pauseVideo();
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
     socket.on("seek", (t) => {
-      if (!playerRef.current) return;
+      const p = playerRef.current;
+      if (!p) return;
       isSyncingRef.current = true;
-      playerRef.current.seekTo(t, true);
+      p.seekTo(t, true);
       setTimeout(() => (isSyncingRef.current = false), 300);
     });
 
     socket.on("change_video", (id) => {
-      if (!playerRef.current) return;
-      playerRef.current.loadVideoById(id);
+      const p = playerRef.current;
+      if (!p) return;
+      p.loadVideoById(id);
     });
 
     socket.on("user_joined", (d) => setParticipants(d.participants));
@@ -161,7 +172,7 @@ export default function Room({ roomId, username }) {
     socket.on("role_assigned", (d) => {
       setParticipants(d.participants);
       const me = d.participants[socket.id];
-      if (me) setRoleBoth(me.role);
+      if (me) updateRole(me.role);
     });
 
     socket.on("receive_message", (m) =>
@@ -174,7 +185,19 @@ export default function Room({ roomId, username }) {
     });
 
     return () => { socket.off(); };
-  }, [roomId, username, handleSync]);
+  }, [roomId, username]); // stable deps
+
+  /* ── Poll for player ready, then apply pending sync ── */
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (playerRef.current && pendingSyncRef.current) {
+        applySync(pendingSyncRef.current);
+        pendingSyncRef.current = null;
+        clearInterval(interval);
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
 
   /* ── Actions ── */
   const send = () => {
@@ -183,9 +206,9 @@ export default function Room({ roomId, username }) {
     setMsg("");
   };
 
-  const change = () => {
-    let id = videoId;
-    const m = videoId.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
+  const changeVideo = () => {
+    let id = videoInputVal;
+    const m = videoInputVal.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
     if (m) id = m[1];
     socket.emit("change_video", { roomId, videoId: id });
   };
@@ -207,26 +230,31 @@ export default function Room({ roomId, username }) {
           <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
             <input
               placeholder="Paste YouTube link"
-              onChange={(e) => setVideoId(e.target.value)}
+              onChange={(e) => setVideoInputVal(e.target.value)}
               style={{ flex: 1 }}
             />
-            <button onClick={change}>Load Video</button>
+            <button onClick={changeVideo}>Load Video</button>
           </div>
         )}
 
         {/*
-          YouTubePlayer is a separate component with no props that change
-          after mount — React will NEVER re-render or unmount it.
-          This is the key fix for the insertBefore crash.
+          Refs are stable objects — passing them as props does NOT
+          cause YouTubePlayer to re-render when Room's state changes.
+          This is the key fix.
         */}
         <YouTubePlayer
-          onReady={handlePlayerReady}
-          onStateChange={handleStateChange}
+          playerRef={playerRef}
+          isSyncingRef={isSyncingRef}
+          roleRef={roleRef}
+          roomId={roomId}
         />
 
         <h3>Participants</h3>
         {Object.entries(participants).map(([id, p]) => (
-          <div key={id} style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
+          <div
+            key={id}
+            style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}
+          >
             <span>{p.username} ({p.role})</span>
             {role === "host" && id !== socket.id && (
               <>
