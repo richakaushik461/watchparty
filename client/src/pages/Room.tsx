@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef } { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useSocket } from '../context/SocketContext';
+import { YouTubePlayer } from '../components/YouTubePlayer';
+import { ParticipantList } from '../components/ParticipantList';
+import { Chat } from '../components/Chat';
+import { VideoState, UserRole, RoomState, ChatMessage } from '../types';
+import { Play, Pause, SkipBack, SkipForward, Link2, Copy, Check, LogOut, Crown, Users, MessageCircle, Shield } from 'lucide-react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { YouTubePlayer } from '../components/YouTubePlayer';
