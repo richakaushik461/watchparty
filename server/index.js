@@ -5,15 +5,76 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-app.use(cors());
+
+// Enhanced CORS for mobile browsers
+app.use(cors({
+  origin: [
+    "https://watchparty-green.vercel.app",
+    "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
+    "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
+    "https://watchparty.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}));
 app.use(express.json());
 
+// Handle preflight requests for mobile browsers
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    "https://watchparty-green.vercel.app",
+    "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
+    "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.options('*', cors());
+
 const server = http.createServer(app);
+
+// Enhanced Socket.IO configuration for mobile
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+    origin: [
+      "https://watchparty-green.vercel.app",
+      "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
+      "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
+      "https://watchparty.vercel.app",
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:3000"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  },
+  allowEIO3: true,
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  connectTimeout: 30000,
+  allowUpgrades: true
 });
 
 // OOP: Room class for managing room state
@@ -69,14 +130,14 @@ class Room {
     }
   }
 
- changeRole(socketId, newRole) {
-  const participant = this.participants.get(socketId);
-  if (participant && socketId !== this.hostId) {
-    participant.role = newRole;
-    return true;
+  changeRole(socketId, newRole) {
+    const participant = this.participants.get(socketId);
+    if (participant && socketId !== this.hostId) {
+      participant.role = newRole;
+      return true;
+    }
+    return false;
   }
-  return false;
-}
 
   hasPermission(socketId, action) {
     const participant = this.participants.get(socketId);
@@ -248,42 +309,40 @@ io.on('connection', (socket) => {
   });
 
   socket.on('assign_role', ({ roomId, userId, role }) => {
-  const room = rooms.get(roomId);
-  if (!room) return;
-  
-  const host = room.getParticipant(socket.id);
-  if (!host || host.role !== 'host') {
-    socket.emit('error', { message: 'Only host can assign roles' });
-    return;
-  }
-  
-  const targetUser = room.getParticipant(userId);
-  if (!targetUser) {
-    socket.emit('error', { message: 'User not found' });
-    return;
-  }
-  
-  if (targetUser.role === 'host') {
-    socket.emit('error', { message: 'Cannot change host role' });
-    return;
-  }
-  
-  room.changeRole(userId, role);
-  
-  const participants = room.getParticipantsList();
-  
-  io.to(roomId).emit('role_assigned', {
-    userId,
-    username: targetUser.username,
-    role,
-    participants: participants
+    const room = rooms.get(roomId);
+    if (!room) return;
+    
+    const host = room.getParticipant(socket.id);
+    if (!host || host.role !== 'host') {
+      socket.emit('error', { message: 'Only host can assign roles' });
+      return;
+    }
+    
+    const targetUser = room.getParticipant(userId);
+    if (!targetUser) {
+      socket.emit('error', { message: 'User not found' });
+      return;
+    }
+    
+    if (targetUser.role === 'host') {
+      socket.emit('error', { message: 'Cannot change host role' });
+      return;
+    }
+    
+    room.changeRole(userId, role);
+    
+    const participants = room.getParticipantsList();
+    
+    io.to(roomId).emit('role_assigned', {
+      userId,
+      username: targetUser.username,
+      role,
+      participants: participants
+    });
+    
+    io.to(userId).emit('your_role_updated', { role, roomId });
   });
-  
-  io.to(userId).emit('your_role_updated', {
-    role,
-    roomId
-  });
-});
+
   socket.on('remove_participant', ({ roomId, userId }) => {
     const room = rooms.get(roomId);
     if (!room) return;
@@ -335,7 +394,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Chat message handler
   socket.on('send_message', ({ roomId, message }) => {
     const room = rooms.get(roomId);
     if (!room) return;
@@ -401,6 +459,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
