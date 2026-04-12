@@ -412,7 +412,9 @@ io.on('connection', (socket) => {
     room.addChatMessage(chatMessage);
     io.to(roomId).emit('new_message', chatMessage);
   });
-
+socket.on('ping', () => {
+  socket.emit('pong');
+});
   socket.on('leave_room', ({ roomId }) => {
     handleLeaveRoom(socket, roomId);
   });
