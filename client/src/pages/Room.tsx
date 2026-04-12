@@ -6,13 +6,6 @@ import { ParticipantList } from '../components/ParticipantList';
 import { Chat } from '../components/Chat';
 import { VideoState, UserRole, RoomState, ChatMessage } from '../types';
 import { Play, Pause, SkipBack, SkipForward, Link2, Copy, Check, LogOut, Crown, Users, MessageCircle, Shield } from 'lucide-react';
-import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { useSocket } from '../context/SocketContext';
-import { YouTubePlayer } from '../components/YouTubePlayer';
-import { ParticipantList } from '../components/ParticipantList';
-import { Chat } from '../components/Chat';
-import { VideoState, UserRole, RoomState, ChatMessage } from '../types';
-import { Play, Pause, SkipBack, SkipForward, Link2, Copy, Check, LogOut, Crown, Users, MessageCircle, Shield } from 'lucide-react';
 
 export const Room: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -70,20 +63,17 @@ export const Room: React.FC = () => {
       setIsSyncing(true);
       setRoomState(prev => prev ? { ...prev, currentVideo: videoState } : null);
       
-      // Apply to player
       if (playerRef.current) {
         const currentTime = playerRef.current.getCurrentTime();
         const playerState = playerRef.current.getPlayerState();
         
-        // Handle play/pause
         if (videoState.playState && playerState !== 1) {
           playerRef.current.playVideo();
         } else if (!videoState.playState && playerState === 1) {
           playerRef.current.pauseVideo();
         }
         
-        // Handle seek
-        if (Math.abs(currentTime - videoState.currentTime) > 1) {
+        if (Math.abs(currentTime - videoState.currentTime) > 1.5) {
           playerRef.current.seekTo(videoState.currentTime);
         }
       }
@@ -110,13 +100,6 @@ export const Room: React.FC = () => {
           participants: data.participants,
           currentUserRole: newRole as UserRole,
         };
-      });
-    });
-
-    socket.on('your_role_updated', (data: any) => {
-      setRoomState(prev => {
-        if (!prev) return null;
-        return { ...prev, currentUserRole: data.role as UserRole };
       });
     });
 
@@ -157,7 +140,6 @@ export const Room: React.FC = () => {
       socket.off('user_joined');
       socket.off('user_left');
       socket.off('role_assigned');
-      socket.off('your_role_updated');
       socket.off('participant_removed');
       socket.off('host_transferred');
       socket.off('new_message');
@@ -173,29 +155,23 @@ export const Room: React.FC = () => {
     };
   }, [socket, isConnected, roomId, username, navigate]);
 
-  // SIMPLE CONTROLS - Direct socket emit
   const handlePlay = () => {
-    console.log('Play clicked - canControl:', canControl, 'roomState:', !!roomState);
     if (!canControl || !roomState) return;
     socket?.emit('play', { roomId: roomState.roomId });
   };
 
   const handlePause = () => {
-    console.log('Pause clicked - canControl:', canControl, 'roomState:', !!roomState);
     if (!canControl || !roomState) return;
     socket?.emit('pause', { roomId: roomState.roomId });
   };
 
   const handleSeek = (time: number) => {
-    console.log('Seek clicked - time:', time);
     if (!canControl || !roomState) return;
     socket?.emit('seek', { roomId: roomState.roomId, time });
   };
 
   const handleVideoStateChange = (state: number) => {
     if (!canControl || !roomState) return;
-    
-    // YT.PlayerState: 1 = playing, 2 = paused
     if (state === 1) {
       socket?.emit('play', { roomId: roomState.roomId });
     } else if (state === 2) {
@@ -208,7 +184,6 @@ export const Room: React.FC = () => {
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?#]+)/,
       /^([a-zA-Z0-9_-]{11})$/
     ];
-    
     for (const pattern of patterns) {
       const match = url.match(pattern);
       if (match) return match[1];
@@ -218,7 +193,6 @@ export const Room: React.FC = () => {
 
   const handleChangeVideo = () => {
     if (!canControl || !roomState) return;
-    
     const videoId = extractVideoId(videoUrl);
     if (videoId) {
       socket?.emit('change_video', { roomId: roomState.roomId, videoId });
@@ -246,16 +220,11 @@ export const Room: React.FC = () => {
 
   const handleSendMessage = (message: string) => {
     if (!roomState || !socket) return;
-    socket.emit('send_message', {
-      roomId: roomState.roomId,
-      message: message,
-    });
+    socket.emit('send_message', { roomId: roomState.roomId, message });
   };
 
   const handleLeaveRoom = () => {
-    if (roomState) {
-      socket?.emit('leave_room', { roomId: roomState.roomId });
-    }
+    if (roomState) socket?.emit('leave_room', { roomId: roomState.roomId });
     navigate('/');
   };
 
@@ -276,7 +245,7 @@ export const Room: React.FC = () => {
 
   if (!roomState) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-blue-50">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600 text-lg">Connecting to room...</p>
@@ -294,185 +263,54 @@ export const Room: React.FC = () => {
               Watch Party
             </h1>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 hidden sm:inline">Room:</span>
-              <button
-                onClick={copyRoomCode}
-                className="px-3 py-1.5 bg-white/80 rounded-full text-sm font-mono font-medium hover:bg-white transition-all flex items-center gap-2 shadow-sm"
-              >
+              <button onClick={copyRoomCode} className="px-3 py-1.5 bg-white/80 rounded-full text-sm font-mono font-medium">
                 {roomState.roomId}
-                {showCopied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {showCopied ? <Check className="w-3.5 h-3.5 text-green-500 inline ml-1" /> : <Copy className="w-3.5 h-3.5 inline ml-1" />}
               </button>
             </div>
-            {isHost && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-100/80 rounded-full">
-                <Crown className="w-3.5 h-3.5 text-amber-600" />
-                <span className="text-xs font-medium text-amber-700">Host</span>
-              </div>
-            )}
-            {currentUserRole === 'moderator' && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100/80 rounded-full">
-                <Shield className="w-3.5 h-3.5 text-blue-600" />
-                <span className="text-xs font-medium text-blue-700">Moderator</span>
-              </div>
-            )}
+            {isHost && <span className="px-3 py-1.5 bg-amber-100 rounded-full text-xs font-medium text-amber-700"><Crown className="w-3.5 h-3.5 inline mr-1" />Host</span>}
+            {currentUserRole === 'moderator' && <span className="px-3 py-1.5 bg-blue-100 rounded-full text-xs font-medium text-blue-700"><Shield className="w-3.5 h-3.5 inline mr-1" />Moderator</span>}
           </div>
-          
           <div className="flex items-center gap-2">
-            <button onClick={copyRoomLink} className="apple-button flex items-center gap-2">
-              <Link2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Copy Link</span>
-            </button>
-            <button onClick={handleLeaveRoom} className="apple-button-danger flex items-center gap-2">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Leave</span>
-            </button>
+            <button onClick={copyRoomLink} className="apple-button flex items-center gap-2"><Link2 className="w-4 h-4" />Copy Link</button>
+            <button onClick={handleLeaveRoom} className="apple-button-danger flex items-center gap-2"><LogOut className="w-4 h-4" />Leave</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-[1920px] mx-auto px-4 md:px-6 py-4">
-        {error && (
-          <div className="mb-4 p-3 bg-red-50/90 backdrop-blur-sm border border-red-200 rounded-xl text-red-600 text-sm animate-fade-in">
-            {error}
-          </div>
-        )}
+        {error && <div className="mb-4 p-3 bg-red-50 rounded-xl text-red-600 text-sm">{error}</div>}
 
         <div className="grid lg:grid-cols-[1fr,380px] gap-6">
           <div className="space-y-4">
-            <div className="apple-card overflow-hidden">
-              <div className="p-3">
-                <YouTubePlayer
-                  ref={playerRef}
-                  videoId={roomState.currentVideo.videoId}
-                  playState={roomState.currentVideo.playState}
-                  onStateChange={handleVideoStateChange}
-                  onTimeUpdate={handleSeek}
-                  userRole={currentUserRole}
-                  isSyncing={isSyncing}
-                />
-              </div>
+            <div className="apple-card overflow-hidden p-3">
+              <YouTubePlayer ref={playerRef} videoId={roomState.currentVideo.videoId} playState={roomState.currentVideo.playState} onStateChange={handleVideoStateChange} onTimeUpdate={handleSeek} userRole={currentUserRole} isSyncing={isSyncing} />
             </div>
 
             {canControl && (
               <div className="apple-card p-5">
                 <div className="flex items-center justify-center gap-4 mb-4">
-                  <button
-                    onClick={handlePause}
-                    className="apple-button w-14 h-14 rounded-full flex items-center justify-center p-0"
-                  >
-                    <Pause className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={handlePlay}
-                    className="apple-button-primary w-16 h-16 rounded-full flex items-center justify-center p-0"
-                  >
-                    <Play className="w-7 h-7" />
-                  </button>
-                  <button
-                    onClick={() => handleSeek(Math.max(0, roomState.currentVideo.currentTime - 10))}
-                    className="apple-button w-14 h-14 rounded-full flex items-center justify-center p-0"
-                  >
-                    <SkipBack className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={() => handleSeek(roomState.currentVideo.currentTime + 10)}
-                    className="apple-button w-14 h-14 rounded-full flex items-center justify-center p-0"
-                  >
-                    <SkipForward className="w-6 h-6" />
-                  </button>
+                  <button onClick={handlePause} className="apple-button w-14 h-14 rounded-full"><Pause className="w-6 h-6" /></button>
+                  <button onClick={handlePlay} className="apple-button-primary w-16 h-16 rounded-full"><Play className="w-7 h-7" /></button>
+                  <button onClick={() => handleSeek(Math.max(0, roomState.currentVideo.currentTime - 10))} className="apple-button w-14 h-14 rounded-full"><SkipBack className="w-6 h-6" /></button>
+                  <button onClick={() => handleSeek(roomState.currentVideo.currentTime + 10)} className="apple-button w-14 h-14 rounded-full"><SkipForward className="w-6 h-6" /></button>
                 </div>
-
                 <div className="flex gap-3">
-                  <input
-                    type="text"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="Paste YouTube URL or Video ID"
-                    className="apple-input flex-1"
-                    onKeyPress={(e) => e.key === 'Enter' && handleChangeVideo()}
-                  />
-                  <button onClick={handleChangeVideo} className="apple-button-primary whitespace-nowrap px-6">
-                    Change Video
-                  </button>
+                  <input type="text" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="Paste YouTube URL" className="apple-input flex-1" />
+                  <button onClick={handleChangeVideo} className="apple-button-primary px-6">Change</button>
                 </div>
               </div>
             )}
 
             <div className="apple-card p-5">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Now Playing</p>
-                  <p className="text-sm text-gray-700 break-all">
-                    youtube.com/watch?v={roomState.currentVideo.videoId}
-                  </p>
-                </div>
-                <div className="sm:border-l sm:border-gray-200 sm:pl-4">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Room Info</p>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Status</span>
-                      <span className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-                        <span className="text-gray-900">{isConnected ? 'Connected' : 'Reconnecting...'}</span>
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Your Role</span>
-                      <span className="font-medium text-gray-900">
-                        {currentUserRole ? currentUserRole.charAt(0).toUpperCase() + currentUserRole.slice(1) : 'Guest'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Participants</span>
-                      <span className="font-medium text-gray-900">{roomState.participants.length}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-gray-500 mb-2">Now Playing</p>
+              <p className="text-sm text-gray-700">youtube.com/watch?v={roomState.currentVideo.videoId}</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <div className="lg:hidden flex gap-2 p-1 bg-gray-100 rounded-full">
-              <button
-                onClick={() => setActiveTab('participants')}
-                className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                  activeTab === 'participants' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Participants ({roomState.participants.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`flex-1 py-2 px-4 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                  activeTab === 'chat' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <MessageCircle className="w-4 h-4" />
-                Chat ({messages.length})
-              </button>
-            </div>
-
-            <div className={`${activeTab === 'participants' ? 'block' : 'hidden'} lg:block`}>
-              <ParticipantList
-                participants={roomState.participants}
-                currentUserId={socket?.id}
-                userRole={currentUserRole}
-                onAssignRole={handleAssignRole}
-                onRemoveParticipant={handleRemoveParticipant}
-                onTransferHost={handleTransferHost}
-              />
-            </div>
-
-            <div className={`${activeTab === 'chat' ? 'block' : 'hidden'} lg:block`}>
-              <Chat
-                messages={messages}
-                onSendMessage={handleSendMessage}
-                currentUserId={socket?.id}
-                isConnected={isConnected}
-              />
-            </div>
+            <ParticipantList participants={roomState.participants} currentUserId={socket?.id} userRole={currentUserRole} onAssignRole={handleAssignRole} onRemoveParticipant={handleRemoveParticipant} onTransferHost={handleTransferHost} />
+            <Chat messages={messages} onSendMessage={handleSendMessage} currentUserId={socket?.id} isConnected={isConnected} />
           </div>
         </div>
       </main>
