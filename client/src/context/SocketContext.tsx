@@ -18,22 +18,56 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
-    const newSocket = io(serverUrl);
+    // Use production URL with fallback
+    const serverUrl = import.meta.env.VITE_SERVER_URL || 'https://watchparty-backend-2w8d.onrender.com';
+    
+    console.log('Connecting to server:', serverUrl);
+    
+    const newSocket = io(serverUrl, {
+      transports: ['websocket', 'polling'], // Polling fallback for mobile
+      secure: true,
+      rejectUnauthorized: false,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+      autoConnect: true,
+      forceNew: true
+    });
 
     newSocket.on('connect', () => {
-      console.log('Socket connected');
+      console.log('✅ Socket connected successfully');
       setIsConnected(true);
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error.message);
       setIsConnected(false);
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+      setIsConnected(false);
+    });
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
+      setIsConnected(true);
+    });
+
+    newSocket.on('reconnect_error', (error) => {
+      console.error('❌ Socket reconnection error:', error.message);
+    });
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('❌ Socket reconnection failed after all attempts');
     });
 
     setSocket(newSocket);
 
     return () => {
+      console.log('Closing socket connection');
       newSocket.close();
     };
   }, []);
