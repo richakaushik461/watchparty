@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  }
+}
+
+@layer components {
+  .apple-card {
+    @apply bg-white/80 backdrop-blur-lg rounded-3xl border border-white/40 shadow-lg;
+  }
+
+  .apple-button {
+    @apply px-5 py-2.5 rounded-full font-medium text-sm transition-all duration-200 
+           bg-gray-100 text-gray-900 hover:bg-gray-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .apple-button-primary {
+    @apply apple-button bg-blue-500 text-white hover:bg-blue-600;
+  }
+
+  .apple-button-danger {
+    @apply apple-button bg-red-500 text-white hover:bg-red-600;
+  }
+
+  .apple-input {
+    @apply w-full px-4 py-3 bg-gray-100/70 rounded-xl border-0 
+           focus:ring-2 focus:ring-blue-500/30 focus:outline-none
+           placeholder:text-gray-500 text-sm;
+  }
+
+  .glass-effect {
+    @apply bg-white/70 backdrop-blur-lg border border-white/30;
+  }
+}
+
+.youtube-container {
+  @apply relative w-full aspect-video rounded-2xl overflow-hidden shadow-xl;
+}
+
+.youtube-container iframe {
+  @apply absolute top-0 left-0 w-full h-full border-0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+.participant-list-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* Custom Scrollbar Styling */
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F1F5F9;
+}
+
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 10px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+/* Disable YouTube iframe interactions for participants */
+.youtube-container iframe {
+  pointer-events: auto;
+}
+
+/* When overlay is present, disable iframe interactions */
+.youtube-container .z-10 + iframe,
+.youtube-container .z-10 ~ iframe {
+  pointer-events: none !important;
+}
