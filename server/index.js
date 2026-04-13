@@ -7,48 +7,26 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 
 // Enhanced CORS for mobile browsers
+const allowedOrigins = [
+  "https://watchparty-green.vercel.app",
+  "https://watchparty.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
 app.use(cors({
-  origin: "*"
+  origin: allowedOrigins,
+  credentials: true
 }));
-app.use(express.json());
 
-/* Handle preflight requests for mobile browsers
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    "https://watchparty-green.vercel.app",
-    "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
-    "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:5173"
-  ];
-  
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
-app.options('*', cors());*/
-
-const server = http.createServer(app);
-
-// Enhanced Socket.IO configuration for mobile
 const io = new Server(server, {
   cors: {
-    origin: "*"
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   },
-  transports: ['websocket'], // 🔥 important
+  transports: ['websocket'] // 🔥 IMPORTANT
 });
-
 // OOP: Room class for managing room state
 class Room {
   constructor(roomId, hostId, hostName) {

@@ -18,7 +18,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // 🔥 Your deployed backend URL
     const SERVER_URL =
       import.meta.env.VITE_SERVER_URL ||
       'https://watchparty-backend-2w8d.onrender.com';
@@ -26,41 +25,28 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     console.log('📡 Connecting to:', SERVER_URL);
 
     const newSocket = io(SERVER_URL, {
-      transports: ['websocket'], // ✅ BEST for production
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      timeout: 20000,
+      transports: ['websocket'], // 🔥 MUST MATCH BACKEND
+      withCredentials: true,
     });
 
-    // ✅ Connected
     newSocket.on('connect', () => {
       console.log('✅ Connected:', newSocket.id);
       setIsConnected(true);
     });
 
-    // ❌ Connection error
     newSocket.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error.message);
+      console.error('❌ Error:', error.message);
       setIsConnected(false);
     });
 
-    // 🔌 Disconnected
-    newSocket.on('disconnect', (reason) => {
-      console.log('🔌 Disconnected:', reason);
+    newSocket.on('disconnect', () => {
+      console.log('🔌 Disconnected');
       setIsConnected(false);
-    });
-
-    // 🔄 Reconnected
-    newSocket.on('reconnect', (attempt) => {
-      console.log('🔄 Reconnected after', attempt, 'attempts');
-      setIsConnected(true);
     });
 
     setSocket(newSocket);
 
     return () => {
-      console.log('🔚 Closing socket');
       newSocket.close();
     };
   }, []);
