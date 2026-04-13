@@ -25,8 +25,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     console.log('📡 Connecting to:', SERVER_URL);
 
     const newSocket = io(SERVER_URL, {
-      transports: ['websocket'], // 🔥 MUST MATCH BACKEND
-      withCredentials: true,
+      transports: ['websocket','pooling'], // 🔥 MUST MATCH BACKEND
+      withCredentials: false,
     });
 
     newSocket.on('connect', () => {

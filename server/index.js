@@ -9,24 +9,62 @@ const app = express();
 // Enhanced CORS for mobile browsers
 const allowedOrigins = [
   "https://watchparty-green.vercel.app",
+  "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
   "https://watchparty.vercel.app",
   "http://localhost:5173",
-  "http://localhost:3000"
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000"
 ];
 
+// Express CORS
 app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}));
+
+app.use(express.json());
+
+// Handle preflight requests
+app.options('*', cors({
   origin: allowedOrigins,
   credentials: true
 }));
 
+// Additional CORS headers middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// ✅ CREATE SERVER FIRST
+const server = http.createServer(app);
+
+// ✅ THEN CREATE IO WITH SERVER
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   },
-  transports: ['websocket'] // 🔥 IMPORTANT
+  allowEIO3: true,
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
+
 // OOP: Room class for managing room state
 class Room {
   constructor(roomId, hostId, hostName) {
@@ -362,9 +400,11 @@ io.on('connection', (socket) => {
     room.addChatMessage(chatMessage);
     io.to(roomId).emit('new_message', chatMessage);
   });
-socket.on('ping', () => {
-  socket.emit('pong');
-});
+
+  socket.on('ping', () => {
+    socket.emit('pong');
+  });
+
   socket.on('leave_room', ({ roomId }) => {
     handleLeaveRoom(socket, roomId);
   });
