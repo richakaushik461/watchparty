@@ -5,27 +5,8 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-// At the top of the file
+
 console.log('🚀 Server starting...');
-
-// In io.on('connection')
-io.on('connection', (socket) => {
-  console.log('✅ User connected:', socket.id);
-  console.log('📊 Total connected clients:', io.engine.clientsCount);
-
-  socket.on('create_room', ({ username }) => {
-    console.log('📤 create_room event received from:', socket.id, 'username:', username);
-    // ... rest of handler
-  });
-
-  // ... other handlers
-});
-
-// At the bottom
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🌐 Server running on port ${PORT}`);
-  console.log(`📍 Access at: http://localhost:${PORT}`);
-});
 
 // Enhanced CORS for mobile browsers
 const allowedOrigins = [
@@ -206,11 +187,13 @@ app.get('/', (req, res) => {
   });
 });
 
-// Socket.IO event handlers
+// ✅ SOCKET.IO EVENT HANDLERS - AFTER IO IS CREATED
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log('✅ User connected:', socket.id);
+  console.log('📊 Total connected clients:', io.engine.clientsCount);
 
   socket.on('create_room', ({ username }) => {
+    console.log('📤 create_room event received from:', socket.id, 'username:', username);
     const roomId = uuidv4().substring(0, 8).toUpperCase();
     const room = new Room(roomId, socket.id, username);
     rooms.set(roomId, room);
@@ -471,7 +454,9 @@ io.on('connection', (socket) => {
   }
 });
 
+// ✅ START SERVER AT THE VERY END
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🌐 Server running on port ${PORT}`);
+  console.log(`📍 Access at: http://localhost:${PORT}`);
 });
