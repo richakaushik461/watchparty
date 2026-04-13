@@ -8,22 +8,11 @@ const app = express();
 
 // Enhanced CORS for mobile browsers
 app.use(cors({
-  origin: [
-    "https://watchparty-green.vercel.app",
-    "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
-    "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
-    "https://watchparty.vercel.app",
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000"
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  origin: "*"
 }));
 app.use(express.json());
 
-// Handle preflight requests for mobile browsers
+/* Handle preflight requests for mobile browsers
 app.use((req, res, next) => {
   const allowedOrigins = [
     "https://watchparty-green.vercel.app",
@@ -48,33 +37,16 @@ app.use((req, res, next) => {
   next();
 });
 
-app.options('*', cors());
+app.options('*', cors());*/
 
 const server = http.createServer(app);
 
 // Enhanced Socket.IO configuration for mobile
 const io = new Server(server, {
   cors: {
-    origin: [
-      "https://watchparty-green.vercel.app",
-      "https://watchparty-git-master-richakaushik461s-projects.vercel.app",
-      "https://watchparty-mfwlioaOj-richakaushik461s-projects.vercel.app",
-      "https://watchparty.vercel.app",
-      "http://localhost:3000",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-      "http://127.0.0.1:3000"
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+    origin: "*"
   },
-  allowEIO3: true,
-  transports: ['websocket', 'polling'],
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  connectTimeout: 30000,
-  allowUpgrades: true
+  transports: ['websocket'], // 🔥 important
 });
 
 // OOP: Room class for managing room state
