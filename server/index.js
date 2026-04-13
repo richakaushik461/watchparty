@@ -5,6 +5,27 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+// At the top of the file
+console.log('🚀 Server starting...');
+
+// In io.on('connection')
+io.on('connection', (socket) => {
+  console.log('✅ User connected:', socket.id);
+  console.log('📊 Total connected clients:', io.engine.clientsCount);
+
+  socket.on('create_room', ({ username }) => {
+    console.log('📤 create_room event received from:', socket.id, 'username:', username);
+    // ... rest of handler
+  });
+
+  // ... other handlers
+});
+
+// At the bottom
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+  console.log(`📍 Access at: http://localhost:${PORT}`);
+});
 
 // Enhanced CORS for mobile browsers
 const allowedOrigins = [
